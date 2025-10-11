@@ -71,7 +71,7 @@
 .social a {
   cursor: pointer;
   font-size: 2em;
-  display: inline-flex;
+  display: table-cell;
   padding: 0.25em;
   margin-right: 1vw;
   transition: color 250ms ease-out;
@@ -90,15 +90,18 @@
 .toggleDarkMode:hover {
   color: #2795e9;
 }
-
+.myCat:hover {
+  color: #ffbf5a;
+}
 .twitter:hover {
   color: #2795e9;
 }
-
 .mastodon:hover {
-  color: #5a4be1;
+  color: #6364FF;
 }
-
+.pixiv:hover {
+  color: #0096fa;
+}
 .zhihu:hover {
   color: #0066ff;
 }

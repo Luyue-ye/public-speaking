@@ -1,3 +1,4 @@
+
 import cs from 'classnames'
 import dynamic from 'next/dynamic'
 import Image from 'next/legacy/image'
@@ -23,7 +24,6 @@ import { searchNotion } from '@/lib/search-notion'
 import { useDarkMode } from '@/lib/use-dark-mode'
 
 import { Footer } from './Footer'
-import { GitHubShareButton } from './GitHubShareButton'
 import { Loading } from './Loading'
 import { NotionPageHeader } from './NotionPageHeader'
 import { Page404 } from './Page404'
@@ -191,6 +191,30 @@ export function NotionPage({
 }: types.PageProps) {
   const router = useRouter()
   const lite = useSearchParam('lite')
+// 添加禁止鼠标右键、禁止选中和禁止文字复制粘贴的逻辑
+React.useEffect(() => {
+  const handleContextMenu = (event: MouseEvent) => {
+    event.preventDefault();
+  };
+
+  const handleSelectStart = (event: Event) => {
+    event.preventDefault();
+  };
+
+  const handleCopy = (event: ClipboardEvent) => {
+    event.preventDefault();
+  };
+
+  document.addEventListener('contextmenu', handleContextMenu);
+  document.addEventListener('selectstart', handleSelectStart);
+  document.addEventListener('copy', handleCopy);
+
+  return () => {
+    document.removeEventListener('contextmenu', handleContextMenu);
+    document.removeEventListener('selectstart', handleSelectStart);
+    document.removeEventListener('copy', handleCopy);
+  };
+}, []);
 
   const components = React.useMemo<Partial<NotionComponents>>(
     () => ({
@@ -328,7 +352,6 @@ export function NotionPage({
         footer={footer}
       />
 
-      <GitHubShareButton />
     </>
   )
 }

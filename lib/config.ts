@@ -20,6 +20,9 @@ import {
   type Site
 } from './types'
 
+export const pixiv = '2781527'
+export const myCat = "https://seto-life.vercel.app/"
+
 export const rootNotionPageId: string = parsePageId(
   getSiteConfig('rootNotionPageId'),
   { uuid: false }
@@ -56,6 +59,7 @@ export const description: string = getSiteConfig('description', 'Notion Blog')
 export const language: string = getSiteConfig('language', 'en')
 
 // social accounts
+
 export const twitter: string | undefined = getSiteConfig('twitter')
 export const mastodon: string | undefined = getSiteConfig('mastodon')
 export const github: string | undefined = getSiteConfig('github')
@@ -65,6 +69,7 @@ export const newsletter: string | undefined = getSiteConfig('newsletter')
 export const zhihu: string | undefined = getSiteConfig('zhihu')
 
 export const getMastodonHandle = (): string | undefined => {
+
   if (!mastodon) {
     return
   }

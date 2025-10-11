@@ -1,3 +1,4 @@
+import { FaCat } from '@react-icons/all-files/fa/FaCat'
 import { FaEnvelopeOpenText } from '@react-icons/all-files/fa/FaEnvelopeOpenText'
 import { FaGithub } from '@react-icons/all-files/fa/FaGithub'
 import { FaLinkedin } from '@react-icons/all-files/fa/FaLinkedin'
@@ -7,6 +8,7 @@ import { FaYoutube } from '@react-icons/all-files/fa/FaYoutube'
 import { FaZhihu } from '@react-icons/all-files/fa/FaZhihu'
 import { IoMoonSharp } from '@react-icons/all-files/io5/IoMoonSharp'
 import { IoSunnyOutline } from '@react-icons/all-files/io5/IoSunnyOutline'
+import { SiPixiv } from '@react-icons/all-files/si/SiPixiv'
 import * as React from 'react'
 
 import * as config from '@/lib/config'
@@ -54,6 +56,16 @@ export function FooterImpl() {
       </div>
 
       <div className={styles.social}>
+        {config.myCat && (
+          <a
+            className={styles.myCat}
+            href={config.myCat}
+            rel='me'
+          >
+            <FaCat/>
+          </a>
+        )}
+
         {config.twitter && (
           <a
             className={styles.twitter}
@@ -74,6 +86,16 @@ export function FooterImpl() {
             rel='me'
           >
             <FaMastodon />
+          </a>
+        )}
+
+        {config.pixiv && (
+          <a
+            className={styles.pixiv}
+            href={`https://www.pixiv.net/users/${config.pixiv}`}
+            rel='me'
+          >
+            <SiPixiv />
           </a>
         )}
 

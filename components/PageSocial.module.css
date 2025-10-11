@@ -79,13 +79,18 @@
   border-color: #3b5998;
 }
 
-.twitter .actionBgPane {
+.myCat .actionBgPane, .myCat:hover {
+  background: #ffbf5a;
+}
+.twitter .actionBgPane, .twitter:hover {
   background: #2795e9;
 }
-.twitter:hover {
-  border-color: #2795e9;
+.mastodon .actionBgPane, .mastodon:hover {
+  background: #6364FF;
 }
-
+.pixiv .actionBgPane, .pixiv:hover  {
+  background: #0096fa;
+}
 .linkedin .actionBgPane {
   background: #0077b5;
 }
