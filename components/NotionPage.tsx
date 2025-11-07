@@ -241,7 +241,7 @@ export function NotionPage({
   const toc = React.useMemo(() => {
     if (!recordMap || !block?.id) return []
     try {
-      return getPageTableOfContents(recordMap, block.id) || []
+      return getPageTableOfContents(block as PageBlock, recordMap) || []
     } catch {
       return []
     }
