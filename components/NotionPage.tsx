@@ -7,8 +7,7 @@ import { type PageBlock } from 'notion-types'
 import {
   formatDate,
   getBlockTitle,
-  getPageProperty,
-  getPageTableOfContents
+  getPageProperty
 } from 'notion-utils'
 import * as React from 'react'
 import BodyClassName from 'react-body-classname'
@@ -43,67 +42,67 @@ import styles from './styles.module.css'
 const Code = dynamic(() =>
   import('react-notion-x/build/third-party/code').then(async (m) => {
     await Promise.allSettled([
-      // @ts-expect-error Ignore prisma types
+      // @ts-expect-error
       import('prismjs/components/prism-markup-templating.js'),
-      // @ts-expect-error Ignore prisma types
+      // @ts-expect-error
       import('prismjs/components/prism-markup.js'),
-      // @ts-expect-error Ignore prisma types
+      // @ts-expect-error
       import('prismjs/components/prism-bash.js'),
-      // @ts-expect-error Ignore prisma types
+      // @ts-expect-error
       import('prismjs/components/prism-c.js'),
-      // @ts-expect-error Ignore prisma types
+      // @ts-expect-error
       import('prismjs/components/prism-cpp.js'),
-      // @ts-expect-error Ignore prisma types
+      // @ts-expect-error
       import('prismjs/components/prism-csharp.js'),
-      // @ts-expect-error Ignore prisma types
+      // @ts-expect-error
       import('prismjs/components/prism-docker.js'),
-      // @ts-expect-error Ignore prisma types
+      // @ts-expect-error
       import('prismjs/components/prism-java.js'),
-      // @ts-expect-error Ignore prisma types
+      // @ts-expect-error
       import('prismjs/components/prism-js-templates.js'),
-      // @ts-expect-error Ignore prisma types
+      // @ts-expect-error
       import('prismjs/components/prism-coffeescript.js'),
-      // @ts-expect-error Ignore prisma types
+      // @ts-expect-error
       import('prismjs/components/prism-diff.js'),
-      // @ts-expect-error Ignore prisma types
+      // @ts-expect-error
       import('prismjs/components/prism-git.js'),
-      // @ts-expect-error Ignore prisma types
+      // @ts-expect-error
       import('prismjs/components/prism-go.js'),
-      // @ts-expect-error Ignore prisma types
+      // @ts-expect-error
       import('prismjs/components/prism-graphql.js'),
-      // @ts-expect-error Ignore prisma types
+      // @ts-expect-error
       import('prismjs/components/prism-handlebars.js'),
-      // @ts-expect-error Ignore prisma types
+      // @ts-expect-error
       import('prismjs/components/prism-less.js'),
-      // @ts-expect-error Ignore prisma types
+      // @ts-expect-error
       import('prismjs/components/prism-makefile.js'),
-      // @ts-expect-error Ignore prisma types
+      // @ts-expect-error
       import('prismjs/components/prism-markdown.js'),
-      // @ts-expect-error Ignore prisma types
+      // @ts-expect-error
       import('prismjs/components/prism-objectivec.js'),
-      // @ts-expect-error Ignore prisma types
+      // @ts-expect-error
       import('prismjs/components/prism-ocaml.js'),
-      // @ts-expect-error Ignore prisma types
+      // @ts-expect-error
       import('prismjs/components/prism-python.js'),
-      // @ts-expect-error Ignore prisma types
+      // @ts-expect-error
       import('prismjs/components/prism-reason.js'),
-      // @ts-expect-error Ignore prisma types
+      // @ts-expect-error
       import('prismjs/components/prism-rust.js'),
-      // @ts-expect-error Ignore prisma types
+      // @ts-expect-error
       import('prismjs/components/prism-sass.js'),
-      // @ts-expect-error Ignore prisma types
+      // @ts-expect-error
       import('prismjs/components/prism-scss.js'),
-      // @ts-expect-error Ignore prisma types
+      // @ts-expect-error
       import('prismjs/components/prism-solidity.js'),
-      // @ts-expect-error Ignore prisma types
+      // @ts-expect-error
       import('prismjs/components/prism-sql.js'),
-      // @ts-expect-error Ignore prisma types
+      // @ts-expect-error
       import('prismjs/components/prism-stylus.js'),
-      // @ts-expect-error Ignore prisma types
+      // @ts-expect-error
       import('prismjs/components/prism-swift.js'),
-      // @ts-expect-error Ignore prisma types
+      // @ts-expect-error
       import('prismjs/components/prism-wasm.js'),
-      // @ts-expect-error Ignore prisma types
+      // @ts-expect-error
       import('prismjs/components/prism-yaml.js')
     ])
     return m.Code
@@ -155,7 +154,6 @@ const propertyLastEditedTimeValue = (
       month: 'long'
     })}`
   }
-
   return defaultFn()
 }
 
@@ -165,14 +163,12 @@ const propertyDateValue = (
 ) => {
   if (pageHeader && schema?.name?.toLowerCase() === 'published') {
     const publishDate = data?.[0]?.[1]?.[0]?.[1]?.start_date
-
     if (publishDate) {
       return `${formatDate(publishDate, {
         month: 'long'
       })}`
     }
   }
-
   return defaultFn()
 }
 
@@ -183,7 +179,6 @@ const propertyTextValue = (
   if (pageHeader && schema?.name?.toLowerCase() === 'author') {
     return <b>{defaultFn()}</b>
   }
-
   return defaultFn()
 }
 
@@ -214,14 +209,12 @@ export function NotionPage({
     []
   )
 
-  // lite mode is for oembed
   const isLiteMode = lite === 'true'
   const { isDarkMode } = useDarkMode()
 
   const siteMapPageUrl = React.useMemo(() => {
     const params: any = {}
     if (lite) params.lite = lite
-
     const searchParams = new URLSearchParams(params)
     return site ? mapPageUrl(site, recordMap!, searchParams) : undefined
   }, [site, recordMap, lite])
@@ -232,33 +225,9 @@ export function NotionPage({
   const isBlogPost =
     block?.type === 'page' && block?.parent_table === 'collection'
 
-  // 我们自己渲染右侧 TOC
-  const showTableOfContents = false
-  const minTableOfContentsItems = 3
-
-  // —— 生成右侧目录数据 —— //
-  const toc = React.useMemo(() => {
-    if (!recordMap || !block?.id) return []
-    try {
-      return getPageTableOfContents(block as PageBlock, recordMap) || []
-    } catch {
-      return []
-    }
-  }, [recordMap, block?.id])
-
-  // —— 点击目录平滑滚动 —— //
-  const onTocClick = React.useCallback((e: React.MouseEvent, id: string) => {
-    e.preventDefault()
-    const el =
-      document.getElementById(id) ||
-      document.querySelector<HTMLElement>(`[data-block-id="${id}"]`)
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-      if (history && history.replaceState) {
-        history.replaceState(null, '', `#${id}`)
-      }
-    }
-  }, [])
+  // ✅ 直接开启内置目录组件
+  const showTableOfContents = true
+  const minTableOfContentsItems = 1
 
   const pageAside = React.useMemo(
     () => (
@@ -273,10 +242,7 @@ export function NotionPage({
 
   const footer = React.useMemo(() => <Footer />, [])
 
-  if (router.isFallback) {
-    return <Loading />
-  }
-
+  if (router.isFallback) return <Loading />
   if (error || !site || !block) {
     return <Page404 site={site} pageId={pageId} error={error} />
   }
@@ -305,53 +271,69 @@ export function NotionPage({
     getPageProperty<string>('Description', block, recordMap) ||
     config.description
 
-  // —— 内联样式（不依赖外部 CSS）——
-  const rightSidebarWidth = 320
-  const tocBoxStyle: React.CSSProperties = {
-    position: 'fixed',
-    right: 24,
-    top: 140,
-    width: 280,
-    maxHeight: '70vh',
-    overflow: 'auto',
-    padding: '12px 14px',
-    background: '#fff',
-    border: '1px solid #e6e9ef',
-    borderRadius: 14,
-    boxShadow: '0 8px 24px rgba(0,0,0,.08)',
-    zIndex: 99999
-  }
-
-  const wrapperStyle: React.CSSProperties = {
-    // 给正文留出右侧空间，避免被目录挡住
-    marginRight: rightSidebarWidth
-  }
-
-  const linkStyle: React.CSSProperties = {
-    color: '#0039A6',
-    textDecoration: 'none'
-  }
-
-  // —— 用 JS 强行追加 !important，压过潜在全局样式 —— //
+  // —— 把内置目录固定到右侧（用 !important 压过一切样式）——
   React.useEffect(() => {
-    const el = document.getElementById('toc-fixed-box')
-    if (!el) return
-    const set = (prop: string, value: string | number) =>
-      el.style.setProperty(prop, String(value), 'important')
+    // 兼容多种 class 变体
+    const toc =
+      document.querySelector<HTMLElement>('nav.notion-table-of-contents') ||
+      document.querySelector<HTMLElement>('div[class*="table_of_contents"]') ||
+      document.querySelector<HTMLElement>('div[class*="table-of-contents"]')
 
-    set('position', 'fixed')
-    set('right', '24px')
-    set('top', '140px')
-    set('width', '280px')
-    set('max-height', '70vh')
-    set('overflow', 'auto')
-    set('padding', '12px 14px')
-    set('background', '#fff')
-    set('border', '1px solid #e6e9ef')
-    set('border-radius', '14px')
-    set('box-shadow', '0 8px 24px rgba(0,0,0,.08)')
-    set('z-index', '99999')
-  }, [])
+    if (!toc) return
+
+    // 给正文让位（避免目录遮挡）
+    const wrapper =
+      document.querySelector<HTMLElement>('.notion-root') ||
+      document.querySelector<HTMLElement>('.notion-page-content') ||
+      document.querySelector<HTMLElement>('.notion-page-wrapper')
+
+    const setImp = (el: HTMLElement, prop: string, value: string) =>
+      el.style.setProperty(prop, value, 'important')
+
+    // 目录样式
+    setImp(toc, 'position', 'fixed')
+    setImp(toc, 'right', '24px')
+    setImp(toc, 'top', '140px')
+    setImp(toc, 'width', '280px')
+    setImp(toc, 'max-height', '70vh')
+    setImp(toc, 'overflow', 'auto')
+    setImp(toc, 'padding', '12px 14px')
+    setImp(toc, 'background', '#fff')
+    setImp(toc, 'border', '1px solid #e6e9ef')
+    setImp(toc, 'border-radius', '14px')
+    setImp(toc, 'box-shadow', '0 8px 24px rgba(0,0,0,.08)')
+    setImp(toc, 'z-index', '99999')
+
+    // 链接颜色（GSU 蓝）
+    toc.querySelectorAll('a').forEach((a) => {
+      const aa = a as HTMLAnchorElement
+      aa.style.setProperty('color', '#0039A6', 'important')
+      aa.style.setProperty('text-decoration', 'none', 'important')
+    })
+
+    // 正文右侧留白
+    if (wrapper) {
+      setImp(wrapper, 'margin-right', '320px')
+    }
+
+    // 平滑滚动（覆盖默认 hash 跳转）
+    toc.querySelectorAll<HTMLAnchorElement>('a[href^="#"]').forEach((a) => {
+      a.addEventListener('click', (e) => {
+        e.preventDefault()
+        const hash = a.getAttribute('href') || ''
+        const id = hash.replace(/^#/, '')
+        const target =
+          document.getElementById(id) ||
+          document.querySelector<HTMLElement>(`[data-block-id="${id}"]`) ||
+          // 再兜底找含有 data-id 的 heading 包裹
+          document.querySelector<HTMLElement>(`[data-id="${id}"]`)
+        if (target) {
+          target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          history.replaceState?.(null, '', `#${id}`)
+        }
+      })
+    })
+  }, [pageId])
 
   return (
     <>
@@ -368,8 +350,7 @@ export function NotionPage({
       {isLiteMode && <BodyClassName className='notion-lite' />}
       {isDarkMode && <BodyClassName className='dark-mode' />}
 
-      {/* —— 包一层用于右侧悬浮 TOC 的布局容器 —— */}
-      <div className="notion-page-wrapper" style={wrapperStyle}>
+      <div className="notion-page-wrapper">
         <main className="notion-content">
           <NotionRenderer
             bodyClassName={cs(
@@ -396,31 +377,6 @@ export function NotionPage({
             footer={footer}
           />
         </main>
-
-        {/* —— 右侧悬浮目录（内联 + !important 双保险）—— */}
-        <aside id="toc-fixed-box" style={tocBoxStyle}>
-          <div style={{ fontWeight: 600, marginBottom: 8 }}>Contents</div>
-          <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-            {toc.map((item: any) => (
-              <li
-                key={item.id}
-                style={{
-                  marginLeft: (item.indentLevel || 0) * 12,
-                  marginBottom: 6
-                }}
-              >
-                <a
-                  href={`#${item.id}`}
-                  title={item.text}
-                  onClick={(e) => onTocClick(e, item.id)}
-                  style={linkStyle}
-                >
-                  {item.text}
-                </a>
-              </li>
-            ))}
-          </ul>
-        </aside>
       </div>
 
       <GitHubShareButton />
