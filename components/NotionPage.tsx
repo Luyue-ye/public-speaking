@@ -1,11 +1,15 @@
-
 import cs from 'classnames'
 import dynamic from 'next/dynamic'
 import Image from 'next/legacy/image'
 import Link from 'next/link'
 import { useRouter } from 'next/router'
 import { type PageBlock } from 'notion-types'
-import { formatDate, getBlockTitle, getPageProperty } from 'notion-utils'
+import {
+  formatDate,
+  getBlockTitle,
+  getPageProperty,
+  getPageTableOfContents
+} from 'notion-utils'
 import * as React from 'react'
 import BodyClassName from 'react-body-classname'
 import {
@@ -120,13 +124,6 @@ const Pdf = dynamic(
     ssr: false
   }
 )
-const TableOfContents = dynamic(
-  () =>
-    import('react-notion-x/build/third-party/table-of-contents').then(
-      (m) => m.TableOfContents
-    ),
-  { ssr: false }
-)
 const Modal = dynamic(
   () =>
     import('react-notion-x/build/third-party/modal').then((m) => {
@@ -236,9 +233,19 @@ export function NotionPage({
   const isBlogPost =
     block?.type === 'page' && block?.parent_table === 'collection'
 
-  // 我们自己渲染右侧 TOC，所以这里设为 false，避免内置 TOC 参与
+  // 我们自己渲染右侧 TOC
   const showTableOfContents = false
   const minTableOfContentsItems = 3
+
+  // —— 生成右侧目录数据 —— //
+  const toc = React.useMemo(() => {
+    if (!recordMap || !block?.id) return []
+    try {
+      return getPageTableOfContents(recordMap, block.id) || []
+    } catch {
+      return []
+    }
+  }, [recordMap, block?.id])
 
   const pageAside = React.useMemo(
     () => (
@@ -272,6 +279,7 @@ export function NotionPage({
   })
 
   if (!config.isServer) {
+    // add important objects to the window global for easy debugging
     const g = window as any
     g.pageId = pageId
     g.recordMap = recordMap
@@ -339,7 +347,22 @@ export function NotionPage({
 
         {/* —— 右侧悬浮目录 —— */}
         <aside className="toc-fixed">
-          <TableOfContents recordMap={recordMap} />
+          <div style={{ fontWeight: 600, marginBottom: 8 }}>Contents</div>
+          <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+            {toc.map((item: any) => (
+              <li
+                key={item.id}
+                style={{
+                  marginLeft: (item.indentLevel || 0) * 12,
+                  marginBottom: 6
+                }}
+              >
+                <a href={`#${item.id}`} title={item.text}>
+                  {item.text}
+                </a>
+              </li>
+            ))}
+          </ul>
         </aside>
       </div>
 
