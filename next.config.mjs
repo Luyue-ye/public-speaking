@@ -11,7 +11,7 @@ const withBundleAnalyzer = bundleAnalyzer({
 const nextConfig = {
   staticPageGenerationTimeout: 300,
 
-  // ✅ 加这一段：构建阶段忽略 ESLint 报错（不影响本地编辑器提示）
+  // ✅ 构建阶段忽略 ESLint 报错（让 Vercel 不再因为 Lint 失败）
   eslint: {
     ignoreDuringBuilds: true
   },
@@ -31,9 +31,6 @@ const nextConfig = {
   },
 
   webpack: (config) => {
-    // Workaround for ensuring that `react` and `react-dom` resolve correctly
-    // when using a locally-linked version of `react-notion-x`.
-    // @see https://github.com/vercel/next.js/issues/50391
     const dirname = path.dirname(fileURLToPath(import.meta.url))
     config.resolve.alias.react = path.resolve(dirname, 'node_modules/react')
     config.resolve.alias['react-dom'] = path.resolve(
