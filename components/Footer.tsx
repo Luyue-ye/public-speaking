@@ -142,3 +142,5 @@ export function FooterImpl() {
 }
 
 export const Footer = React.memo(FooterImpl)
+
+
