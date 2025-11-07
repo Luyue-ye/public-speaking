@@ -9,8 +9,7 @@ import * as React from 'react'
 import BodyClassName from 'react-body-classname'
 import {
   type NotionComponents,
-  NotionRenderer,
-  useNotionContext
+  NotionRenderer
 } from 'react-notion-x'
 import { EmbeddedTweet, TweetNotFound, TweetSkeleton } from 'react-tweet'
 import { useSearchParam } from 'react-use'
@@ -30,10 +29,7 @@ import { Page404 } from './Page404'
 import { PageHead } from './PageHead'
 import styles from './styles.module.css'
 
-// -----------------------------------------------------------------------------
-// dynamic imports for optional components
-// -----------------------------------------------------------------------------
-
+// ---------------- optional components ----------------
 const Code = dynamic(() =>
   import('react-notion-x/build/third-party/code').then(async (m) => {
     await Promise.allSettled([
@@ -126,44 +122,35 @@ const Modal = dynamic(
 )
 
 function Tweet({ id }: { id: string }) {
-  const { recordMap } = useNotionContext()
-  const tweet = (recordMap as types.ExtendedTweetRecordMap)?.tweets?.[id]
+  // 用 react-tweet 的静态渲染
   return (
     <React.Suspense fallback={<TweetSkeleton />}>
-      {tweet ? <EmbeddedTweet tweet={tweet} /> : <TweetNotFound />}
+      <EmbeddedTweet id={id} />
     </React.Suspense>
   )
 }
 
-const propertyLastEditedTimeValue = (
-  { block, pageHeader }: any,
-  def: () => React.ReactNode
-) => {
-  if (pageHeader && block?.last_edited_time) {
-    return `Last updated ${formatDate(block?.last_edited_time, { month: 'long' })}`
+// ---------- 小工具：从 block 里拿纯文本 ----------
+function getPlainTitleFromBlock(block: any): string {
+  // 优先 notion-utils 的 getBlockTitle（对 heading 同样可用）
+  try {
+    // 有些 heading 返回空时再兜底
+    const t = getBlockTitle(block, {} as any)
+    if (t) return t
+  } catch {}
+  const raw = block?.properties?.title
+  if (Array.isArray(raw) && Array.isArray(raw[0])) {
+    return String(raw[0][0] || '')
   }
-  return def()
+  return ''
 }
 
-const propertyDateValue = (
-  { data, schema, pageHeader }: any,
-  def: () => React.ReactNode
-) => {
-  if (pageHeader && schema?.name?.toLowerCase() === 'published') {
-    const publishDate = data?.[0]?.[1]?.[0]?.[1]?.start_date
-    if (publishDate) return `${formatDate(publishDate, { month: 'long' })}`
-  }
-  return def()
-}
-
-const propertyTextValue = (
-  { schema, pageHeader }: any,
-  def: () => React.ReactNode
-) => (pageHeader && schema?.name?.toLowerCase() === 'author' ? <b>{def()}</b> : def())
-
+// ---------- 渲染单页 ----------
 export function NotionPage({ site, recordMap, error, pageId }: types.PageProps) {
   const router = useRouter()
   const lite = useSearchParam('lite')
+  const { isDarkMode } = useDarkMode()
+  const isLiteMode = lite === 'true'
 
   const components = React.useMemo<Partial<NotionComponents>>(
     () => ({
@@ -175,45 +162,19 @@ export function NotionPage({ site, recordMap, error, pageId }: types.PageProps) 
       Pdf,
       Modal,
       Tweet,
-      Header: NotionPageHeader,
-      propertyLastEditedTimeValue,
-      propertyTextValue,
-      propertyDateValue
+      Header: NotionPageHeader
     }),
     []
   )
 
-  const isLiteMode = lite === 'true'
-  const { isDarkMode } = useDarkMode()
-
-  const siteMapPageUrl = React.useMemo(() => {
-    const params: any = {}
-    if (lite) params.lite = lite
-    const searchParams = new URLSearchParams(params)
-    return site ? mapPageUrl(site, recordMap!, searchParams) : undefined
-  }, [site, recordMap, lite])
-
+  // 取页面根 block
   const keys = Object.keys(recordMap?.block || {})
   const block = recordMap?.block?.[keys[0]!]?.value
-  const isBlogPost = block?.type === 'page' && block?.parent_table === 'collection'
-
-  // 开启内置目录（我们只借助它生成 TOC，然后自己接管行为）
-  const showTableOfContents = true
-  const minTableOfContentsItems = 1
-
-  const footer = React.useMemo(() => <Footer />, [])
 
   if (router.isFallback) return <Loading />
   if (error || !site || !block) return <Page404 site={site} pageId={pageId} error={error} />
 
   const title = getBlockTitle(block, recordMap) || site.name
-
-  if (!config.isServer) {
-    const g = window as any
-    g.pageId = pageId
-    g.recordMap = recordMap
-    g.block = block
-  }
 
   const canonicalPageUrl = config.isDev ? undefined : getCanonicalPageUrl(site, recordMap)(pageId)
 
@@ -226,160 +187,164 @@ export function NotionPage({ site, recordMap, error, pageId }: types.PageProps) 
   const socialDescription =
     getPageProperty<string>('Description', block, recordMap) || config.description
 
-  // ====== 关键 useEffect：补齐标题 id + 目录固定到右侧 + 委托点击平滑滚动 ======
+  // ========= 构建“我们自己的 TOC” (只取 H2/H3) =========
+  type MyTocItem = { id: string; text: string; level: 2 | 3 }
+  const tocItems = React.useMemo<MyTocItem[]>(() => {
+    const items: MyTocItem[] = []
+    const blocks = recordMap?.block || {}
+    for (const id in blocks) {
+      const b = (blocks as any)[id]?.value
+      if (!b) continue
+      // 兼容新旧命名：heading_2 / sub_header；heading_3 / sub_sub_header
+      const t = b.type
+      const isH2 = t === 'heading_2' || t === 'sub_header'
+      const isH3 = t === 'heading_3' || t === 'sub_sub_header'
+      if (!isH2 && !isH3) continue
+
+      const text = getPlainTitleFromBlock(b)
+      if (!text) continue
+      items.push({ id: b.id, text, level: isH2 ? 2 : 3 })
+    }
+    // 按照出现顺序排序（recordMap 已经大致有序，但稳妥些）
+    return items
+  }, [recordMap])
+
+  // ========= 给正文对应 heading 补上 id，保证锚点存在 =========
   React.useEffect(() => {
-    const GSU_BLUE = '#0039A6'
-    const RIGHT_MARGIN = 320
-
-    const setImp = (el: HTMLElement, prop: string, value: string) =>
-      el.style.setProperty(prop, value, 'important')
-
-    // 1) 给标题补 id（用 data-block-id / data-id）
-    const ensureHeadingIds = () => {
-      const candidates = Array.from(
-        document.querySelectorAll<HTMLElement>(
-          // 常见的 heading 容器 class / 标签
-          'h1,h2,h3,h4,h5,h6,' +
-            '.notion-h1,.notion-h2,.notion-h3,.notion-header,' +
-            '.notion-heading,[data-block-id],[data-id]'
-        )
-      )
-
-      candidates.forEach((el) => {
-        // 只给“像标题”的元素打 id：含有 heading 类 或 tagName 是 H*
-        const isHeadingLike =
-          /^H[1-6]$/.test(el.tagName) ||
-          el.className.includes('notion-h1') ||
-          el.className.includes('notion-h2') ||
-          el.className.includes('notion-h3') ||
-          el.className.includes('notion-header') ||
-          el.className.includes('notion-heading')
-
-        if (!isHeadingLike) return
-
-        const bid =
-          el.getAttribute('data-block-id') ||
-          el.getAttribute('data-id') ||
-          el.parentElement?.getAttribute('data-block-id') ||
-          el.parentElement?.getAttribute('data-id')
-
-        if (!bid) return
-        if (!el.id) el.id = bid
+    const ensureIds = () => {
+      tocItems.forEach((it) => {
+        // 常见 heading DOM：.notion-h2/.notion-h3 或其父节点带 data-block-id
+        const el =
+          document.querySelector<HTMLElement>(`[data-block-id="${it.id}"]`) ||
+          document.querySelector<HTMLElement>(`[data-id="${it.id}"]`)
+        if (!el) return
+        // 如果具体的 H2/H3 在子节点上，则把 id 给最近的 heading-like 元素
+        const target =
+          el.querySelector('h2,h3,.notion-h2,.notion-h3') ||
+          el
+        if (!(target as HTMLElement).id) {
+          ;(target as HTMLElement).id = it.id
+        }
       })
     }
+    ensureIds()
+    const mo = new MutationObserver(ensureIds)
+    mo.observe(document.documentElement, { childList: true, subtree: true })
+    return () => mo.disconnect()
+  }, [tocItems])
 
-    // 2) 定位 TOC，固定到右侧，并给正文留白
-    const styleAndDockTOC = () => {
-      const toc =
-        document.querySelector<HTMLElement>('nav.notion-table-of-contents') ||
-        document.querySelector<HTMLElement>('.notion-table-of-contents') ||
-        document.querySelector<HTMLElement>('[class*="table_of_contents"]') ||
-        document.querySelector<HTMLElement>('[class*="table-of-contents"]')
+  // ========= 渲染右侧固定导航 + 点击平滑滚动 =========
+  const TocFloating = React.useMemo(() => {
+    if (!tocItems.length) return null
 
-      if (!toc) return false
-
-      // 固定右侧
-      setImp(toc, 'position', 'fixed')
-      setImp(toc, 'right', '24px')
-      setImp(toc, 'top', '140px')
-      setImp(toc, 'width', '280px')
-      setImp(toc, 'max-height', '70vh')
-      setImp(toc, 'overflow', 'auto')
-      setImp(toc, 'padding', '12px 14px')
-      setImp(toc, 'background', '#fff')
-      setImp(toc, 'border', '1px solid #e6e9ef')
-      setImp(toc, 'border-radius', '14px')
-      setImp(toc, 'box-shadow', '0 8px 24px rgba(0,0,0,.08)')
-      setImp(toc, 'z-index', '99999')
-
-      // 链接配色
-      toc.querySelectorAll('a').forEach((a) => {
-        const aa = a as HTMLAnchorElement
-        aa.style.setProperty('color', GSU_BLUE, 'important')
-        aa.style.setProperty('text-decoration', 'none', 'important')
-        aa.style.setProperty('cursor', 'pointer', 'important')
-      })
-
-      // 给正文让位
-      const wrapper =
-        (document.querySelector('.notion-page-wrapper') as HTMLElement) ||
-        (document.querySelector('.notion-root') as HTMLElement) ||
-        (document.querySelector('.notion-viewport') as HTMLElement) ||
-        (document.querySelector('.notion-page-content') as HTMLElement) ||
-        (document.body as HTMLElement)
-      setImp(wrapper, 'margin-right', `${RIGHT_MARGIN}px`)
-
-      return true
+    const gsuBlue = '#0039A6'
+    const itemStyle: React.CSSProperties = {
+      display: 'block',
+      padding: '6px 8px',
+      lineHeight: 1.25,
+      fontSize: 14,
+      color: gsuBlue,
+      textDecoration: 'none',
+      cursor: 'pointer'
     }
 
-    // 3) 委托点击（兼容 /path#id 或 纯 #id）
-    const onTocClick = (e: MouseEvent) => {
-      const a = (e.target as HTMLElement)?.closest?.('a')
+    const onClick = (e: React.MouseEvent<HTMLDivElement>) => {
+      const a = (e.target as HTMLElement).closest('a[data-toc-id]') as HTMLAnchorElement | null
       if (!a) return
-      // 只拦截 TOC 内部的链接
-      const tocContains = a.closest(
-        'nav.notion-table-of-contents,.notion-table-of-contents,[class*="table_of_contents"],[class*="table-of-contents"]'
-      )
-      if (!tocContains) return
-
-      const href = (a as HTMLAnchorElement).getAttribute('href') || ''
-      // 不是 hash 跳转就不拦截
-      if (!href.includes('#')) return
-
       e.preventDefault()
-
-      let id = ''
-      try {
-        const url = new URL(href, window.location.href)
-        id = (url.hash || '').replace(/^#/, '')
-      } catch {
-        id = href.replace(/^.*#/, '')
-      }
+      const id = a.getAttribute('data-toc-id') || ''
       if (!id) return
-
-      // 找目标元素：id -> data-block-id -> data-id
       const target =
         document.getElementById(id) ||
         document.querySelector<HTMLElement>(`[data-block-id="${id}"]`) ||
         document.querySelector<HTMLElement>(`[data-id="${id}"]`)
-
       if (!target) return
 
-      // 找滚动容器：优先 notion-viewport，否则 window
-      const viewport =
-        (document.querySelector('.notion-viewport') as HTMLElement) || null
-
-      const top =
-        target.getBoundingClientRect().top +
-        (viewport ? viewport.scrollTop : window.scrollY) -
-        12 // 微调
-
-      if (viewport) {
-        viewport.scrollTo({ top, behavior: 'smooth' })
-      } else {
-        window.scrollTo({ top, behavior: 'smooth' })
-      }
-
+      const y = target.getBoundingClientRect().top + window.scrollY - 12
+      window.scrollTo({ top: y, behavior: 'smooth' })
       history.replaceState?.(null, '', `#${id}`)
     }
 
-    // 初次执行 + 观察 DOM 变更（标题/目录可能晚于渲染出现）
-    ensureHeadingIds()
-    styleAndDockTOC()
+    return (
+      <div
+        onClick={onClick}
+        style={{
+          position: 'fixed',
+          right: 24,
+          top: 140,
+          width: 280,
+          maxHeight: '70vh',
+          overflow: 'auto',
+          padding: '12px 14px',
+          background: '#fff',
+          border: '1px solid #e6e9ef',
+          borderRadius: 14,
+          boxShadow: '0 8px 24px rgba(0,0,0,.08)',
+          zIndex: 99999
+        }}
+      >
+        <div style={{ fontWeight: 700, marginBottom: 8, color: '#111', fontSize: 14 }}>
+          Contents
+        </div>
+        <nav>
+          {tocItems.map((it, idx) => (
+            <a
+              key={idx}
+              data-toc-id={it.id}
+              href={`#${it.id}`}
+              style={{
+                ...itemStyle,
+                marginLeft: it.level === 2 ? 0 : 14
+              }}
+            >
+              {it.text}
+            </a>
+          ))}
+        </nav>
+      </div>
+    )
+  }, [tocItems])
 
-    const mo = new MutationObserver(() => {
-      ensureHeadingIds()
-      styleAndDockTOC()
-    })
-    mo.observe(document.documentElement, { childList: true, subtree: true })
-
-    document.addEventListener('click', onTocClick, true)
-
+  // ========= 给正文右侧留白，避免被导航遮挡 =========
+  React.useEffect(() => {
+    if (!tocItems.length) return
+    const wrapper =
+      (document.querySelector('.notion-page-wrapper') as HTMLElement) ||
+      (document.querySelector('.notion-root') as HTMLElement) ||
+      (document.querySelector('.notion-viewport') as HTMLElement) ||
+      (document.querySelector('.notion-page-content') as HTMLElement) ||
+      (document.body as HTMLElement)
+    wrapper && wrapper.style.setProperty('margin-right', '320px', 'important')
     return () => {
-      mo.disconnect()
-      document.removeEventListener('click', onTocClick, true)
+      wrapper && wrapper.style.removeProperty('margin-right')
     }
-  }, [pageId])
+  }, [tocItems])
+
+  // ========= 隐藏 Notion 原生 TOC（如果你页面底部还放了一个块） =========
+  React.useEffect(() => {
+    const hideNative = () => {
+      document
+        .querySelectorAll<HTMLElement>(
+          '.notion-table-of-contents,[class*="table_of_contents"],[class*="table-of-contents"]'
+        )
+        .forEach((el) => el.style.setProperty('display', 'none', 'important'))
+    }
+    hideNative()
+    const mo = new MutationObserver(hideNative)
+    mo.observe(document.documentElement, { childList: true, subtree: true })
+    return () => mo.disconnect()
+  }, [])
+
+  const siteMapPageUrl = React.useMemo(() => {
+    const params: any = {}
+    if (lite) params.lite = lite
+    const searchParams = new URLSearchParams(params)
+    return site ? mapPageUrl(site, recordMap!, searchParams) : undefined
+  }, [site, recordMap, lite])
+
+  const footer = React.useMemo(() => <Footer />, [])
+
+  const isBlogPost = false // 和我们无关了；自定义导航独立显示
 
   return (
     <>
@@ -396,6 +361,9 @@ export function NotionPage({ site, recordMap, error, pageId }: types.PageProps) 
       {isLiteMode && <BodyClassName className='notion-lite' />}
       {isDarkMode && <BodyClassName className='dark-mode' />}
 
+      {/* 我们自己的固定目录 */}
+      {TocFloating}
+
       <div className="notion-page-wrapper">
         <main className="notion-content">
           <NotionRenderer
@@ -411,16 +379,15 @@ export function NotionPage({ site, recordMap, error, pageId }: types.PageProps) 
             fullPage={!isLiteMode}
             previewImages={!!recordMap.preview_images}
             showCollectionViewDropdown={false}
-            showTableOfContents={showTableOfContents}
-            minTableOfContentsItems={minTableOfContentsItems}
+            // 不使用内置 TOC
+            showTableOfContents={false}
             defaultPageIcon={config.defaultPageIcon}
             defaultPageCover={config.defaultPageCover}
             defaultPageCoverPosition={config.defaultPageCoverPosition}
             mapPageUrl={siteMapPageUrl}
             mapImageUrl={mapImageUrl}
             searchNotion={config.isSearchEnabled ? searchNotion : undefined}
-            // 保持默认 aside，目录我们用 JS 固定
-            footer={React.useMemo(() => <Footer />, [])}
+            footer={footer}
           />
         </main>
       </div>
