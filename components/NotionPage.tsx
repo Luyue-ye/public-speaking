@@ -155,6 +155,7 @@ const propertyLastEditedTimeValue = (
       month: 'long'
     })}`
   }
+
   return defaultFn()
 }
 
@@ -164,12 +165,14 @@ const propertyDateValue = (
 ) => {
   if (pageHeader && schema?.name?.toLowerCase() === 'published') {
     const publishDate = data?.[0]?.[1]?.[0]?.[1]?.start_date
+
     if (publishDate) {
       return `${formatDate(publishDate, {
         month: 'long'
       })}`
     }
   }
+
   return defaultFn()
 }
 
@@ -180,6 +183,7 @@ const propertyTextValue = (
   if (pageHeader && schema?.name?.toLowerCase() === 'author') {
     return <b>{defaultFn()}</b>
   }
+
   return defaultFn()
 }
 
@@ -210,12 +214,15 @@ export function NotionPage({
     []
   )
 
+  // lite mode is for oembed
   const isLiteMode = lite === 'true'
+
   const { isDarkMode } = useDarkMode()
 
   const siteMapPageUrl = React.useMemo(() => {
     const params: any = {}
     if (lite) params.lite = lite
+
     const searchParams = new URLSearchParams(params)
     return site ? mapPageUrl(site, recordMap!, searchParams) : undefined
   }, [site, recordMap, lite])
@@ -243,13 +250,11 @@ export function NotionPage({
   // —— 点击目录平滑滚动 —— //
   const onTocClick = React.useCallback((e: React.MouseEvent, id: string) => {
     e.preventDefault()
-    // 优先找标题的 id；不行则找 data-block-id
     const el =
       document.getElementById(id) ||
       document.querySelector<HTMLElement>(`[data-block-id="${id}"]`)
     if (el) {
       el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-      // 更新地址栏 hash（不刷新页面）
       if (history && history.replaceState) {
         history.replaceState(null, '', `#${id}`)
       }
@@ -269,7 +274,10 @@ export function NotionPage({
 
   const footer = React.useMemo(() => <Footer />, [])
 
-  if (router.isFallback) return <Loading />
+  if (router.isFallback) {
+    return <Loading />
+  }
+
   if (error || !site || !block) {
     return <Page404 site={site} pageId={pageId} error={error} />
   }
@@ -277,6 +285,7 @@ export function NotionPage({
   const title = getBlockTitle(block, recordMap) || site.name
 
   if (!config.isServer) {
+    // add important objects to the window global for easy debugging
     const g = window as any
     g.pageId = pageId
     g.recordMap = recordMap
@@ -298,6 +307,33 @@ export function NotionPage({
     getPageProperty<string>('Description', block, recordMap) ||
     config.description
 
+  // —— 内联样式（不依赖外部 CSS）——
+  const rightSidebarWidth = 320
+  const tocBoxStyle: React.CSSProperties = {
+    position: 'fixed',
+    right: 24,
+    top: 140,
+    width: 280,
+    maxHeight: '70vh',
+    overflow: 'auto',
+    padding: '12px 14px',
+    background: '#fff',
+    border: '1px solid #e6e9ef',
+    borderRadius: 14,
+    boxShadow: '0 8px 24px rgba(0,0,0,.08)',
+    zIndex: 9999
+  }
+
+  const wrapperStyle: React.CSSProperties = {
+    // 给正文留出右侧空间，避免被目录挡住
+    marginRight: rightSidebarWidth
+  }
+
+  const linkStyle: React.CSSProperties = {
+    color: '#0039A6',
+    textDecoration: 'none'
+  }
+
   return (
     <>
       <PageHead
@@ -314,7 +350,7 @@ export function NotionPage({
       {isDarkMode && <BodyClassName className='dark-mode' />}
 
       {/* —— 包一层用于右侧悬浮 TOC 的布局容器 —— */}
-      <div className="notion-page-wrapper">
+      <div className="notion-page-wrapper" style={wrapperStyle}>
         <main className="notion-content">
           <NotionRenderer
             bodyClassName={cs(
@@ -342,8 +378,8 @@ export function NotionPage({
           />
         </main>
 
-        {/* —— 右侧悬浮目录 —— */}
-        <aside className="toc-fixed">
+        {/* —— 右侧悬浮目录（内联样式版本）—— */}
+        <aside style={tocBoxStyle}>
           <div style={{ fontWeight: 600, marginBottom: 8 }}>Contents</div>
           <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
             {toc.map((item: any) => (
@@ -354,7 +390,12 @@ export function NotionPage({
                   marginBottom: 6
                 }}
               >
-                <a href={`#${item.id}`} title={item.text} onClick={(e) => onTocClick(e, item.id)}>
+                <a
+                  href={`#${item.id}`}
+                  title={item.text}
+                  onClick={(e) => onTocClick(e, item.id)}
+                  style={linkStyle}
+                >
                   {item.text}
                 </a>
               </li>
