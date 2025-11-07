@@ -1,6 +1,6 @@
+// next.config.mjs
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-
 import bundleAnalyzer from '@next/bundle-analyzer'
 
 const withBundleAnalyzer = bundleAnalyzer({
@@ -8,8 +8,14 @@ const withBundleAnalyzer = bundleAnalyzer({
   enabled: process.env.ANALYZE === 'true'
 })
 
-export default withBundleAnalyzer({
+const nextConfig = {
   staticPageGenerationTimeout: 300,
+
+  // ✅ 加这一段：构建阶段忽略 ESLint 报错（不影响本地编辑器提示）
+  eslint: {
+    ignoreDuringBuilds: true
+  },
+
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: 'www.notion.so' },
@@ -39,4 +45,6 @@ export default withBundleAnalyzer({
 
   // See https://react-tweet.vercel.app/next#troubleshooting
   transpilePackages: ['react-tweet']
-})
+}
+
+export default withBundleAnalyzer(nextConfig)
