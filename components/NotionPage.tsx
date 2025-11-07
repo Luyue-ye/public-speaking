@@ -197,7 +197,7 @@ export function NotionPage({ site, recordMap, error, pageId }: types.PageProps) 
   const block = recordMap?.block?.[keys[0]!]?.value
   const isBlogPost = block?.type === 'page' && block?.parent_table === 'collection'
 
-  // 开启内置目录渲染（我们稍后把它搬出来固定）
+  // 开启内置目录（我们只借助它生成 TOC，然后自己接管行为）
   const showTableOfContents = true
   const minTableOfContentsItems = 1
 
@@ -226,19 +226,59 @@ export function NotionPage({ site, recordMap, error, pageId }: types.PageProps) 
   const socialDescription =
     getPageProperty<string>('Description', block, recordMap) || config.description
 
-  // ====== 关键：把内置 TOC 搬到 body 并固定到右侧（含平滑滚动 & 强制样式） ======
+  // ====== 关键 useEffect：补齐标题 id + 目录固定到右侧 + 委托点击平滑滚动 ======
   React.useEffect(() => {
-    let moved = false
-    let originalParent: HTMLElement | null = null
-    let placeholder: Comment | null = null
-
     const GSU_BLUE = '#0039A6'
     const RIGHT_MARGIN = 320
 
     const setImp = (el: HTMLElement, prop: string, value: string) =>
       el.style.setProperty(prop, value, 'important')
 
-    const styleToc = (toc: HTMLElement) => {
+    // 1) 给标题补 id（用 data-block-id / data-id）
+    const ensureHeadingIds = () => {
+      const candidates = Array.from(
+        document.querySelectorAll<HTMLElement>(
+          // 常见的 heading 容器 class / 标签
+          'h1,h2,h3,h4,h5,h6,' +
+            '.notion-h1,.notion-h2,.notion-h3,.notion-header,' +
+            '.notion-heading,[data-block-id],[data-id]'
+        )
+      )
+
+      candidates.forEach((el) => {
+        // 只给“像标题”的元素打 id：含有 heading 类 或 tagName 是 H*
+        const isHeadingLike =
+          /^H[1-6]$/.test(el.tagName) ||
+          el.className.includes('notion-h1') ||
+          el.className.includes('notion-h2') ||
+          el.className.includes('notion-h3') ||
+          el.className.includes('notion-header') ||
+          el.className.includes('notion-heading')
+
+        if (!isHeadingLike) return
+
+        const bid =
+          el.getAttribute('data-block-id') ||
+          el.getAttribute('data-id') ||
+          el.parentElement?.getAttribute('data-block-id') ||
+          el.parentElement?.getAttribute('data-id')
+
+        if (!bid) return
+        if (!el.id) el.id = bid
+      })
+    }
+
+    // 2) 定位 TOC，固定到右侧，并给正文留白
+    const styleAndDockTOC = () => {
+      const toc =
+        document.querySelector<HTMLElement>('nav.notion-table-of-contents') ||
+        document.querySelector<HTMLElement>('.notion-table-of-contents') ||
+        document.querySelector<HTMLElement>('[class*="table_of_contents"]') ||
+        document.querySelector<HTMLElement>('[class*="table-of-contents"]')
+
+      if (!toc) return false
+
+      // 固定右侧
       setImp(toc, 'position', 'fixed')
       setImp(toc, 'right', '24px')
       setImp(toc, 'top', '140px')
@@ -252,92 +292,92 @@ export function NotionPage({ site, recordMap, error, pageId }: types.PageProps) 
       setImp(toc, 'box-shadow', '0 8px 24px rgba(0,0,0,.08)')
       setImp(toc, 'z-index', '99999')
 
+      // 链接配色
       toc.querySelectorAll('a').forEach((a) => {
         const aa = a as HTMLAnchorElement
         aa.style.setProperty('color', GSU_BLUE, 'important')
         aa.style.setProperty('text-decoration', 'none', 'important')
+        aa.style.setProperty('cursor', 'pointer', 'important')
       })
-    }
 
-    const addSmoothScroll = (toc: HTMLElement) => {
-      toc.querySelectorAll<HTMLAnchorElement>('a').forEach((a) => {
-        a.onclick = (e) => {
-          // 拦截所有跳转（包括绝对路径的 /page#id）
-          e.preventDefault()
-          const href = a.getAttribute('href') || ''
-          let id = ''
-          try {
-            const url = new URL(href, window.location.href)
-            id = (url.hash || '').replace(/^#/, '')
-          } catch {
-            id = href.replace(/^.*#/, '')
-          }
-          if (!id) return
-
-          const target =
-            document.getElementById(id) ||
-            document.querySelector<HTMLElement>(`[data-block-id="${id}"]`) ||
-            document.querySelector<HTMLElement>(`[data-id="${id}"]`)
-
-          if (target) {
-            const y = target.getBoundingClientRect().top + window.scrollY - 12
-            window.scrollTo({ top: y, behavior: 'smooth' })
-            history.replaceState?.(null, '', `#${id}`)
-          }
-        }
-      })
-    }
-
-    const giveRightSpace = () => {
+      // 给正文让位
       const wrapper =
         (document.querySelector('.notion-page-wrapper') as HTMLElement) ||
         (document.querySelector('.notion-root') as HTMLElement) ||
-        (document.querySelector('.notion-page-content') as HTMLElement) ||
         (document.querySelector('.notion-viewport') as HTMLElement) ||
+        (document.querySelector('.notion-page-content') as HTMLElement) ||
         (document.body as HTMLElement)
       setImp(wrapper, 'margin-right', `${RIGHT_MARGIN}px`)
+
+      return true
     }
 
-    const findTOC = (): HTMLElement | null => {
-      return (
-        document.querySelector<HTMLElement>('nav.notion-table-of-contents') ||
-        document.querySelector<HTMLElement>('.notion-table-of-contents') ||
-        document.querySelector<HTMLElement>('[class*="table_of_contents"]') ||
-        document.querySelector<HTMLElement>('[class*="table-of-contents"]')
+    // 3) 委托点击（兼容 /path#id 或 纯 #id）
+    const onTocClick = (e: MouseEvent) => {
+      const a = (e.target as HTMLElement)?.closest?.('a')
+      if (!a) return
+      // 只拦截 TOC 内部的链接
+      const tocContains = a.closest(
+        'nav.notion-table-of-contents,.notion-table-of-contents,[class*="table_of_contents"],[class*="table-of-contents"]'
       )
+      if (!tocContains) return
+
+      const href = (a as HTMLAnchorElement).getAttribute('href') || ''
+      // 不是 hash 跳转就不拦截
+      if (!href.includes('#')) return
+
+      e.preventDefault()
+
+      let id = ''
+      try {
+        const url = new URL(href, window.location.href)
+        id = (url.hash || '').replace(/^#/, '')
+      } catch {
+        id = href.replace(/^.*#/, '')
+      }
+      if (!id) return
+
+      // 找目标元素：id -> data-block-id -> data-id
+      const target =
+        document.getElementById(id) ||
+        document.querySelector<HTMLElement>(`[data-block-id="${id}"]`) ||
+        document.querySelector<HTMLElement>(`[data-id="${id}"]`)
+
+      if (!target) return
+
+      // 找滚动容器：优先 notion-viewport，否则 window
+      const viewport =
+        (document.querySelector('.notion-viewport') as HTMLElement) || null
+
+      const top =
+        target.getBoundingClientRect().top +
+        (viewport ? viewport.scrollTop : window.scrollY) -
+        12 // 微调
+
+      if (viewport) {
+        viewport.scrollTo({ top, behavior: 'smooth' })
+      } else {
+        window.scrollTo({ top, behavior: 'smooth' })
+      }
+
+      history.replaceState?.(null, '', `#${id}`)
     }
 
-    const moveTOC = (toc: HTMLElement) => {
-      if (moved) return
-      moved = true
-      originalParent = toc.parentElement
-      placeholder = document.createComment('toc-placeholder')
-      if (originalParent) originalParent.replaceChild(placeholder, toc)
-      document.body.appendChild(toc) // 关键：移到 body，脱离原布局
-      styleToc(toc)
-      addSmoothScroll(toc)
-      giveRightSpace()
-    }
+    // 初次执行 + 观察 DOM 变更（标题/目录可能晚于渲染出现）
+    ensureHeadingIds()
+    styleAndDockTOC()
 
-    // 立即尝试
-    const now = findTOC()
-    if (now) moveTOC(now)
-
-    // 监听目录生成（SSR/CSR 场景）
     const mo = new MutationObserver(() => {
-      const t = findTOC()
-      if (t) moveTOC(t)
+      ensureHeadingIds()
+      styleAndDockTOC()
     })
     mo.observe(document.documentElement, { childList: true, subtree: true })
 
-    // 清理：还原 DOM（可选）
+    document.addEventListener('click', onTocClick, true)
+
     return () => {
       mo.disconnect()
-      // 可不还原，避免 flicker；如果还原：
-      // const toc = findTOC()
-      // if (toc && originalParent && placeholder) {
-      //   originalParent.replaceChild(toc, placeholder)
-      // }
+      document.removeEventListener('click', onTocClick, true)
     }
   }, [pageId])
 
@@ -379,8 +419,8 @@ export function NotionPage({ site, recordMap, error, pageId }: types.PageProps) 
             mapPageUrl={siteMapPageUrl}
             mapImageUrl={mapImageUrl}
             searchNotion={config.isSearchEnabled ? searchNotion : undefined}
-            // 注意：不再传 pageAside，避免它把 TOC 放在侧栏里
-            footer={footer}
+            // 保持默认 aside，目录我们用 JS 固定
+            footer={React.useMemo(() => <Footer />, [])}
           />
         </main>
       </div>
