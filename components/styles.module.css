@@ -215,56 +215,46 @@
     animation: octocat-wave 560ms ease-in-out;
   }
 }
+/* ===== Mobile layout fixes (CSS Modules safe – scoped via .notion) ===== */
 
-.hidden {
-  visibility: hidden;
-}
-/* ===== Mobile layout fixes (scoped via CSS Modules) ===== */
-:global(.notion-table_of_contents) {
-  display: none !important; /* 双保险，彻底关掉目录 */
+/* 彻底隐藏 Notion 的目录块（就算页面里有 TOC 块也不显示） */
+.notion :global(.notion-table_of_contents) {
+  display: none !important;
 }
 
-/* 1) 移动端去掉右侧空白/挤压 */
+/* 1) 移动端去掉右侧空白/挤压（某些主题/样式会在大屏给正文预留侧栏空间） */
 @media (max-width: 1024px) {
-  :global(.notion-page-wrapper),
-  :global(.notion-content),
-  :global(.notion-page-content),
-  :global(.notion-root),
-  :global(.notion-app-inner) {
+  .notion :global(.notion-page-wrapper),
+  .notion :global(.notion-content),
+  .notion :global(.notion-page-content),
+  .notion :global(.notion-root),
+  .notion :global(.notion-app-inner) {
     margin-right: 0 !important;
     padding-right: 0 !important;
   }
 }
 
-/* 2) 顶部导航在手机上不固定（避免把正文顶下去/盖住） */
+/* 2) 顶部导航在手机上不固定（避免把正文顶下去/遮挡） */
 @media (max-width: 768px) {
-  :global(header),
-  :global(.notion-header),
-  :global(.notion-navbar),
-  :global(.nav),
-  :global(.nav-header) {
+  .notion :global(header),
+  .notion :global(.notion-header),
+  .notion :global(.notion-navbar),
+  .notion :global(.nav),
+  .notion :global(.nav-header) {
     position: static !important;
     top: auto !important;
   }
 
-  /* 收紧左右留白，正文更贴边一点 */
-  :global(.notion-page-content) {
+  /* 收紧左右留白，让正文更贴边一点 */
+  .notion :global(.notion-page-content) {
     padding-left: 12px !important;
     padding-right: 12px !important;
   }
 }
 
-/* 3) 图片在小屏自适应，不出现横向滚动 */
-:global(img),
-:global(.notion-asset-wrapper img) {
+/* 3) 图片在小屏自适应，不撑出横向滚动 */
+.notion :global(img),
+.notion :global(.notion-asset-wrapper img) {
   max-width: 100% !important;
   height: auto !important;
-}
-
-/* 4) 防止任何全局样式把内容往右推 */
-@media (max-width: 1024px) {
-  :global(body),
-  :global(html) {
-    overflow-x: hidden !important;
-  }
 }
