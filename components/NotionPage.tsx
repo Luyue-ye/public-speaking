@@ -1,3 +1,4 @@
+import { TableOfContents } from 'react-notion-x/build/third-party/table-of-contents'
 import cs from 'classnames'
 import dynamic from 'next/dynamic'
 import Image from 'next/legacy/image'
