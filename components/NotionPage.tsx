@@ -4,11 +4,7 @@ import Image from 'next/legacy/image'
 import Link from 'next/link'
 import { useRouter } from 'next/router'
 import { type PageBlock } from 'notion-types'
-import {
-  formatDate,
-  getBlockTitle,
-  getPageProperty
-} from 'notion-utils'
+import { formatDate, getBlockTitle, getPageProperty } from 'notion-utils'
 import * as React from 'react'
 import BodyClassName from 'react-body-classname'
 import {
@@ -31,7 +27,6 @@ import { GitHubShareButton } from './GitHubShareButton'
 import { Loading } from './Loading'
 import { NotionPageHeader } from './NotionPageHeader'
 import { Page404 } from './Page404'
-import { PageAside } from './PageAside'
 import { PageHead } from './PageHead'
 import styles from './styles.module.css'
 
@@ -119,9 +114,7 @@ const Equation = dynamic(() =>
 )
 const Pdf = dynamic(
   () => import('react-notion-x/build/third-party/pdf').then((m) => m.Pdf),
-  {
-    ssr: false
-  }
+  { ssr: false }
 )
 const Modal = dynamic(
   () =>
@@ -129,15 +122,12 @@ const Modal = dynamic(
       m.Modal.setAppElement('.notion-viewport')
       return m.Modal
     }),
-  {
-    ssr: false
-  }
+  { ssr: false }
 )
 
 function Tweet({ id }: { id: string }) {
   const { recordMap } = useNotionContext()
   const tweet = (recordMap as types.ExtendedTweetRecordMap)?.tweets?.[id]
-
   return (
     <React.Suspense fallback={<TweetSkeleton />}>
       {tweet ? <EmbeddedTweet tweet={tweet} /> : <TweetNotFound />}
@@ -147,47 +137,31 @@ function Tweet({ id }: { id: string }) {
 
 const propertyLastEditedTimeValue = (
   { block, pageHeader }: any,
-  defaultFn: () => React.ReactNode
+  def: () => React.ReactNode
 ) => {
   if (pageHeader && block?.last_edited_time) {
-    return `Last updated ${formatDate(block?.last_edited_time, {
-      month: 'long'
-    })}`
+    return `Last updated ${formatDate(block?.last_edited_time, { month: 'long' })}`
   }
-  return defaultFn()
+  return def()
 }
 
 const propertyDateValue = (
   { data, schema, pageHeader }: any,
-  defaultFn: () => React.ReactNode
+  def: () => React.ReactNode
 ) => {
   if (pageHeader && schema?.name?.toLowerCase() === 'published') {
     const publishDate = data?.[0]?.[1]?.[0]?.[1]?.start_date
-    if (publishDate) {
-      return `${formatDate(publishDate, {
-        month: 'long'
-      })}`
-    }
+    if (publishDate) return `${formatDate(publishDate, { month: 'long' })}`
   }
-  return defaultFn()
+  return def()
 }
 
 const propertyTextValue = (
   { schema, pageHeader }: any,
-  defaultFn: () => React.ReactNode
-) => {
-  if (pageHeader && schema?.name?.toLowerCase() === 'author') {
-    return <b>{defaultFn()}</b>
-  }
-  return defaultFn()
-}
+  def: () => React.ReactNode
+) => (pageHeader && schema?.name?.toLowerCase() === 'author' ? <b>{def()}</b> : def())
 
-export function NotionPage({
-  site,
-  recordMap,
-  error,
-  pageId
-}: types.PageProps) {
+export function NotionPage({ site, recordMap, error, pageId }: types.PageProps) {
   const router = useRouter()
   const lite = useSearchParam('lite')
 
@@ -221,31 +195,16 @@ export function NotionPage({
 
   const keys = Object.keys(recordMap?.block || {})
   const block = recordMap?.block?.[keys[0]!]?.value
+  const isBlogPost = block?.type === 'page' && block?.parent_table === 'collection'
 
-  const isBlogPost =
-    block?.type === 'page' && block?.parent_table === 'collection'
-
-  // ✅ 直接开启内置目录组件
+  // 开启内置目录渲染（我们稍后把它搬出来固定）
   const showTableOfContents = true
   const minTableOfContentsItems = 1
-
-  const pageAside = React.useMemo(
-    () => (
-      <PageAside
-        block={block!}
-        recordMap={recordMap!}
-        isBlogPost={isBlogPost}
-      />
-    ),
-    [block, recordMap, isBlogPost]
-  )
 
   const footer = React.useMemo(() => <Footer />, [])
 
   if (router.isFallback) return <Loading />
-  if (error || !site || !block) {
-    return <Page404 site={site} pageId={pageId} error={error} />
-  }
+  if (error || !site || !block) return <Page404 site={site} pageId={pageId} error={error} />
 
   const title = getBlockTitle(block, recordMap) || site.name
 
@@ -256,9 +215,7 @@ export function NotionPage({
     g.block = block
   }
 
-  const canonicalPageUrl = config.isDev
-    ? undefined
-    : getCanonicalPageUrl(site, recordMap)(pageId)
+  const canonicalPageUrl = config.isDev ? undefined : getCanonicalPageUrl(site, recordMap)(pageId)
 
   const socialImage = mapImageUrl(
     getPageProperty<string>('Social Image', block, recordMap) ||
@@ -266,73 +223,122 @@ export function NotionPage({
       config.defaultPageCover,
     block
   )
-
   const socialDescription =
-    getPageProperty<string>('Description', block, recordMap) ||
-    config.description
+    getPageProperty<string>('Description', block, recordMap) || config.description
 
-  // —— 把内置目录固定到右侧（用 !important 压过一切样式）——
+  // ====== 关键：把内置 TOC 搬到 body 并固定到右侧（含平滑滚动 & 强制样式） ======
   React.useEffect(() => {
-    // 兼容多种 class 变体
-    const toc =
-      document.querySelector<HTMLElement>('nav.notion-table-of-contents') ||
-      document.querySelector<HTMLElement>('div[class*="table_of_contents"]') ||
-      document.querySelector<HTMLElement>('div[class*="table-of-contents"]')
+    let moved = false
+    let originalParent: HTMLElement | null = null
+    let placeholder: Comment | null = null
 
-    if (!toc) return
-
-    // 给正文让位（避免目录遮挡）
-    const wrapper =
-      document.querySelector<HTMLElement>('.notion-root') ||
-      document.querySelector<HTMLElement>('.notion-page-content') ||
-      document.querySelector<HTMLElement>('.notion-page-wrapper')
+    const GSU_BLUE = '#0039A6'
+    const RIGHT_MARGIN = 320
 
     const setImp = (el: HTMLElement, prop: string, value: string) =>
       el.style.setProperty(prop, value, 'important')
 
-    // 目录样式
-    setImp(toc, 'position', 'fixed')
-    setImp(toc, 'right', '24px')
-    setImp(toc, 'top', '140px')
-    setImp(toc, 'width', '280px')
-    setImp(toc, 'max-height', '70vh')
-    setImp(toc, 'overflow', 'auto')
-    setImp(toc, 'padding', '12px 14px')
-    setImp(toc, 'background', '#fff')
-    setImp(toc, 'border', '1px solid #e6e9ef')
-    setImp(toc, 'border-radius', '14px')
-    setImp(toc, 'box-shadow', '0 8px 24px rgba(0,0,0,.08)')
-    setImp(toc, 'z-index', '99999')
+    const styleToc = (toc: HTMLElement) => {
+      setImp(toc, 'position', 'fixed')
+      setImp(toc, 'right', '24px')
+      setImp(toc, 'top', '140px')
+      setImp(toc, 'width', '280px')
+      setImp(toc, 'max-height', '70vh')
+      setImp(toc, 'overflow', 'auto')
+      setImp(toc, 'padding', '12px 14px')
+      setImp(toc, 'background', '#fff')
+      setImp(toc, 'border', '1px solid #e6e9ef')
+      setImp(toc, 'border-radius', '14px')
+      setImp(toc, 'box-shadow', '0 8px 24px rgba(0,0,0,.08)')
+      setImp(toc, 'z-index', '99999')
 
-    // 链接颜色（GSU 蓝）
-    toc.querySelectorAll('a').forEach((a) => {
-      const aa = a as HTMLAnchorElement
-      aa.style.setProperty('color', '#0039A6', 'important')
-      aa.style.setProperty('text-decoration', 'none', 'important')
-    })
-
-    // 正文右侧留白
-    if (wrapper) {
-      setImp(wrapper, 'margin-right', '320px')
+      toc.querySelectorAll('a').forEach((a) => {
+        const aa = a as HTMLAnchorElement
+        aa.style.setProperty('color', GSU_BLUE, 'important')
+        aa.style.setProperty('text-decoration', 'none', 'important')
+      })
     }
 
-    // 平滑滚动（覆盖默认 hash 跳转）
-    toc.querySelectorAll<HTMLAnchorElement>('a[href^="#"]').forEach((a) => {
-      a.addEventListener('click', (e) => {
-        e.preventDefault()
-        const hash = a.getAttribute('href') || ''
-        const id = hash.replace(/^#/, '')
-        const target =
-          document.getElementById(id) ||
-          document.querySelector<HTMLElement>(`[data-block-id="${id}"]`) ||
-          // 再兜底找含有 data-id 的 heading 包裹
-          document.querySelector<HTMLElement>(`[data-id="${id}"]`)
-        if (target) {
-          target.scrollIntoView({ behavior: 'smooth', block: 'start' })
-          history.replaceState?.(null, '', `#${id}`)
+    const addSmoothScroll = (toc: HTMLElement) => {
+      toc.querySelectorAll<HTMLAnchorElement>('a').forEach((a) => {
+        a.onclick = (e) => {
+          // 拦截所有跳转（包括绝对路径的 /page#id）
+          e.preventDefault()
+          const href = a.getAttribute('href') || ''
+          let id = ''
+          try {
+            const url = new URL(href, window.location.href)
+            id = (url.hash || '').replace(/^#/, '')
+          } catch {
+            id = href.replace(/^.*#/, '')
+          }
+          if (!id) return
+
+          const target =
+            document.getElementById(id) ||
+            document.querySelector<HTMLElement>(`[data-block-id="${id}"]`) ||
+            document.querySelector<HTMLElement>(`[data-id="${id}"]`)
+
+          if (target) {
+            const y = target.getBoundingClientRect().top + window.scrollY - 12
+            window.scrollTo({ top: y, behavior: 'smooth' })
+            history.replaceState?.(null, '', `#${id}`)
+          }
         }
       })
+    }
+
+    const giveRightSpace = () => {
+      const wrapper =
+        (document.querySelector('.notion-page-wrapper') as HTMLElement) ||
+        (document.querySelector('.notion-root') as HTMLElement) ||
+        (document.querySelector('.notion-page-content') as HTMLElement) ||
+        (document.querySelector('.notion-viewport') as HTMLElement) ||
+        (document.body as HTMLElement)
+      setImp(wrapper, 'margin-right', `${RIGHT_MARGIN}px`)
+    }
+
+    const findTOC = (): HTMLElement | null => {
+      return (
+        document.querySelector<HTMLElement>('nav.notion-table-of-contents') ||
+        document.querySelector<HTMLElement>('.notion-table-of-contents') ||
+        document.querySelector<HTMLElement>('[class*="table_of_contents"]') ||
+        document.querySelector<HTMLElement>('[class*="table-of-contents"]')
+      )
+    }
+
+    const moveTOC = (toc: HTMLElement) => {
+      if (moved) return
+      moved = true
+      originalParent = toc.parentElement
+      placeholder = document.createComment('toc-placeholder')
+      if (originalParent) originalParent.replaceChild(placeholder, toc)
+      document.body.appendChild(toc) // 关键：移到 body，脱离原布局
+      styleToc(toc)
+      addSmoothScroll(toc)
+      giveRightSpace()
+    }
+
+    // 立即尝试
+    const now = findTOC()
+    if (now) moveTOC(now)
+
+    // 监听目录生成（SSR/CSR 场景）
+    const mo = new MutationObserver(() => {
+      const t = findTOC()
+      if (t) moveTOC(t)
     })
+    mo.observe(document.documentElement, { childList: true, subtree: true })
+
+    // 清理：还原 DOM（可选）
+    return () => {
+      mo.disconnect()
+      // 可不还原，避免 flicker；如果还原：
+      // const toc = findTOC()
+      // if (toc && originalParent && placeholder) {
+      //   originalParent.replaceChild(toc, placeholder)
+      // }
+    }
   }, [pageId])
 
   return (
@@ -373,7 +379,7 @@ export function NotionPage({
             mapPageUrl={siteMapPageUrl}
             mapImageUrl={mapImageUrl}
             searchNotion={config.isSearchEnabled ? searchNotion : undefined}
-            pageAside={pageAside}
+            // 注意：不再传 pageAside，避免它把 TOC 放在侧栏里
             footer={footer}
           />
         </main>
