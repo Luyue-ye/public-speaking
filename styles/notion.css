@@ -403,3 +403,43 @@
 .notion-equation.notion-equation-block{
   align-items: center;
 }
+/* ===== Mobile layout fixes ===== */
+
+/* 1) 移动端去掉右侧空白/挤压 */
+@media (max-width: 1024px) {
+  .notion-page-wrapper,
+  .notion-content,
+  .notion-page-content,
+  .notion-root {
+    margin-right: 0 !important;
+  }
+}
+
+/* 2) 顶部导航在手机上不固定（避免把正文顶下去/盖住） */
+@media (max-width: 768px) {
+  header,
+  .notion-header,
+  .notion-navbar,
+  .nav,
+  .nav-header {
+    position: static !important;
+  }
+
+  /* 收紧左右留白，正文更贴边一点 */
+  .notion-page-content {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+}
+
+/* 3) 图片在小屏自适应，不撑出横向滚动 */
+img,
+.notion-asset-wrapper img {
+  max-width: 100% !important;
+  height: auto !important;
+}
+
+/* 4) 彻底关闭任何目录（双保险） */
+.notion-table_of_contents {
+  display: none !important;
+}
