@@ -4,14 +4,10 @@ import Image from 'next/legacy/image'
 import Link from 'next/link'
 import { useRouter } from 'next/router'
 import { type PageBlock } from 'notion-types'
-import { formatDate, getBlockTitle, getPageProperty } from 'notion-utils'
+import { getBlockTitle, getPageProperty } from 'notion-utils'
 import * as React from 'react'
 import BodyClassName from 'react-body-classname'
-import {
-  type NotionComponents,
-  NotionRenderer
-} from 'react-notion-x'
-import { EmbeddedTweet, TweetNotFound, TweetSkeleton } from 'react-tweet'
+import { type NotionComponents, NotionRenderer } from 'react-notion-x'
 import { useSearchParam } from 'react-use'
 
 import type * as types from '@/lib/types'
@@ -30,7 +26,7 @@ import { PageHead } from './PageHead'
 import ClientToc from './ClientToc'
 import styles from './styles.module.css'
 
-// -------- optional components (无 @ts-expect-error) --------
+// -------- optional components（无 @ts-expect-error）--------
 const Code = dynamic(() =>
   import('react-notion-x/build/third-party/code').then((m) => m.Code)
 )
@@ -45,20 +41,13 @@ const Pdf = dynamic(
   { ssr: false }
 )
 const Modal = dynamic(
-  () => import('react-notion-x/build/third-party/modal').then((m) => {
-    m.Modal.setAppElement('.notion-viewport')
-    return m.Modal
-  }),
+  () =>
+    import('react-notion-x/build/third-party/modal').then((m) => {
+      m.Modal.setAppElement('.notion-viewport')
+      return m.Modal
+    }),
   { ssr: false }
 )
-
-function Tweet({ id }: { id: string }) {
-  return (
-    <React.Suspense fallback={<TweetSkeleton />}>
-      <EmbeddedTweet id={id} />
-    </React.Suspense>
-  )
-}
 
 export function NotionPage({
   site,
@@ -80,14 +69,13 @@ export function NotionPage({
       Equation,
       Pdf,
       Modal,
-      Tweet,
       Header: NotionPageHeader
     }),
     []
   )
 
   const siteMapPageUrl = React.useMemo(() => {
-    const params: any = {}
+    const params: Record<string, string> = {}
     if (lite) params.lite = lite
     const searchParams = new URLSearchParams(params)
     return site ? mapPageUrl(site, recordMap!, searchParams) : undefined
@@ -132,7 +120,7 @@ export function NotionPage({
         isBlogPost={false}
       />
 
-      {/* ✅ 固定右侧目录（我们自己的组件） */}
+      {/* ✅ 固定右侧目录（自定义组件，不依赖 Notion 内置 TOC） */}
       <ClientToc />
 
       {isLiteMode && <BodyClassName className='notion-lite' />}
