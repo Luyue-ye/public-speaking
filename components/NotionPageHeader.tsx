@@ -39,12 +39,20 @@ export function NotionPageHeader({
 }) {
   const { components, mapPageUrl } = useNotionContext()
 
+  // ✅ 原本的 default 导航保持正常工作
   if (navigationStyle === 'default') {
     return <Header block={block} />
   }
 
   return (
-    <header className='notion-header'>
+    <header
+      className='notion-header'
+      style={{
+        // ✅ 在小屏幕隐藏整个导航栏
+        display: 'none',
+      }}
+    >
+      {/* ✅ 以下内容仍然存在桌面端可用 */}
       <div className='notion-nav-header'>
         <Breadcrumbs block={block} rootOnly={true} />
 
@@ -84,6 +92,15 @@ export function NotionPageHeader({
           {isSearchEnabled && <Search block={block} title={null} />}
         </div>
       </div>
+
+      {/* ✅ 让桌面端重新显示 */}
+      <style jsx>{`
+        @media (min-width: 768px) {
+          header.notion-header {
+            display: block !important;
+          }
+        }
+      `}</style>
     </header>
   )
 }
