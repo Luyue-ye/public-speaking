@@ -1,4 +1,4 @@
-import { TableOfContents } from 'react-notion-x/build/third-party/table-of-contents'
+
 import cs from 'classnames'
 import dynamic from 'next/dynamic'
 import Image from 'next/legacy/image'
@@ -119,6 +119,13 @@ const Pdf = dynamic(
   {
     ssr: false
   }
+)
+const TableOfContents = dynamic(
+  () =>
+    import('react-notion-x/build/third-party/table-of-contents').then(
+      (m) => m.TableOfContents
+    ),
+  { ssr: false }
 )
 const Modal = dynamic(
   () =>
