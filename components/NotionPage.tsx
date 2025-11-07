@@ -216,7 +216,6 @@ export function NotionPage({
 
   // lite mode is for oembed
   const isLiteMode = lite === 'true'
-
   const { isDarkMode } = useDarkMode()
 
   const siteMapPageUrl = React.useMemo(() => {
@@ -285,7 +284,6 @@ export function NotionPage({
   const title = getBlockTitle(block, recordMap) || site.name
 
   if (!config.isServer) {
-    // add important objects to the window global for easy debugging
     const g = window as any
     g.pageId = pageId
     g.recordMap = recordMap
@@ -321,7 +319,7 @@ export function NotionPage({
     border: '1px solid #e6e9ef',
     borderRadius: 14,
     boxShadow: '0 8px 24px rgba(0,0,0,.08)',
-    zIndex: 9999
+    zIndex: 99999
   }
 
   const wrapperStyle: React.CSSProperties = {
@@ -333,6 +331,27 @@ export function NotionPage({
     color: '#0039A6',
     textDecoration: 'none'
   }
+
+  // —— 用 JS 强行追加 !important，压过潜在全局样式 —— //
+  React.useEffect(() => {
+    const el = document.getElementById('toc-fixed-box')
+    if (!el) return
+    const set = (prop: string, value: string | number) =>
+      el.style.setProperty(prop, String(value), 'important')
+
+    set('position', 'fixed')
+    set('right', '24px')
+    set('top', '140px')
+    set('width', '280px')
+    set('max-height', '70vh')
+    set('overflow', 'auto')
+    set('padding', '12px 14px')
+    set('background', '#fff')
+    set('border', '1px solid #e6e9ef')
+    set('border-radius', '14px')
+    set('box-shadow', '0 8px 24px rgba(0,0,0,.08)')
+    set('z-index', '99999')
+  }, [])
 
   return (
     <>
@@ -378,8 +397,8 @@ export function NotionPage({
           />
         </main>
 
-        {/* —— 右侧悬浮目录（内联样式版本）—— */}
-        <aside style={tocBoxStyle}>
+        {/* —— 右侧悬浮目录（内联 + !important 双保险）—— */}
+        <aside id="toc-fixed-box" style={tocBoxStyle}>
           <div style={{ fontWeight: 600, marginBottom: 8 }}>Contents</div>
           <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
             {toc.map((item: any) => (
