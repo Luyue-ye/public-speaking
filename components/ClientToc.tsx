@@ -28,12 +28,15 @@ export default function ClientToc() {
       }
       if (!level) continue
 
+      // 尽量用 dataset / id
+      const dataset = (node as HTMLElement & { dataset?: DOMStringMap }).dataset || {}
+      const pid = dataset.blockId || dataset.id
       const id =
-        node.getAttribute('id') ||
-        node.getAttribute('data-block-id') ||
-        node.getAttribute('data-id') ||
-        node.parentElement?.getAttribute('data-block-id') ||
-        node.parentElement?.getAttribute('data-id')
+        pid ||
+        node.id ||
+        node.parentElement?.id ||
+        (node.parentElement as HTMLElement & { dataset?: DOMStringMap })?.dataset?.blockId ||
+        (node.parentElement as HTMLElement & { dataset?: DOMStringMap })?.dataset?.id
 
       if (!id) continue
 
@@ -42,7 +45,7 @@ export default function ClientToc() {
         document.querySelector<HTMLElement>(`[data-block-id="${id}"]`) ||
         document.querySelector<HTMLElement>(`[data-id="${id}"]`) ||
         node
-      if (!host.id) host.id = id
+      if (host && !host.id) host.id = id
 
       const text = getHeadingText(node)
       if (!text) continue
@@ -53,14 +56,13 @@ export default function ClientToc() {
     setItems(found)
   }, [])
 
+  // Hooks 统一提前执行
   React.useEffect(() => {
     scanHeadings()
     const mo = new MutationObserver(() => scanHeadings())
     mo.observe(document.documentElement, { childList: true, subtree: true })
     return () => mo.disconnect()
   }, [scanHeadings])
-
-  if (!items.length) return null
 
   React.useEffect(() => {
     const wrapper =
@@ -75,22 +77,6 @@ export default function ClientToc() {
     }
   }, [])
 
-  const onClick = (e: React.MouseEvent) => {
-    const a = (e.target as HTMLElement).closest('a[data-toc-id]') as HTMLAnchorElement | null
-    if (!a) return
-    e.preventDefault()
-    const id = a.getAttribute('data-toc-id') || ''
-    if (!id) return
-    const target =
-      document.getElementById(id) ||
-      document.querySelector<HTMLElement>(`[data-block-id="${id}"]`) ||
-      document.querySelector<HTMLElement>(`[data-id="${id}"]`)
-    if (!target) return
-    const y = target.getBoundingClientRect().top + window.scrollY - 12
-    window.scrollTo({ top: y, behavior: 'smooth' })
-    history.replaceState?.(null, '', `#${id}`)
-  }
-
   const linkStyle: React.CSSProperties = {
     display: 'block',
     padding: '6px 8px',
@@ -101,9 +87,23 @@ export default function ClientToc() {
     cursor: 'pointer'
   }
 
+  const handleLinkClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    e.preventDefault()
+    const a = e.currentTarget
+    const id = a.dataset.tocId || ''
+    if (!id) return
+    const el =
+      document.getElementById(id) ||
+      document.querySelector<HTMLElement>(`[data-block-id="${id}"]`) ||
+      document.querySelector<HTMLElement>(`[data-id="${id}"]`)
+    if (!el) return
+    const y = el.getBoundingClientRect().top + window.scrollY - 12
+    window.scrollTo({ top: y, behavior: 'smooth' })
+    history.replaceState?.(null, '', `#${id}`)
+  }
+
   return (
     <aside
-      onClick={onClick}
       style={{
         position: 'fixed',
         right: 24,
@@ -116,24 +116,31 @@ export default function ClientToc() {
         border: '1px solid #e6e9ef',
         borderRadius: 14,
         boxShadow: '0 8px 24px rgba(0,0,0,.08)',
-        zIndex: 99999
+        zIndex: 1000
       }}
+      aria-label="Page table of contents"
     >
       <div style={{ fontWeight: 700, marginBottom: 8, color: '#111', fontSize: 14 }}>
         Contents
       </div>
-      <nav>
-        {items.map((it) => (
-          <a
-            key={it.id}
-            data-toc-id={it.id}
-            href={`#${it.id}`}
-            style={{ ...linkStyle, marginLeft: it.level === 2 ? 0 : 14 }}
-            title={it.text}
-          >
-            {it.text}
-          </a>
-        ))}
+
+      <nav role="navigation" aria-label="Section links">
+        {items.length === 0 ? (
+          <div style={{ fontSize: 12, color: '#999' }}>No headings</div>
+        ) : (
+          items.map((it) => (
+            <a
+              key={it.id}
+              data-toc-id={it.id}
+              href={`#${it.id}`}
+              onClick={handleLinkClick}
+              style={{ ...linkStyle, marginLeft: it.level === 2 ? 0 : 14 }}
+              title={it.text}
+            >
+              {it.text}
+            </a>
+          ))
+        )}
       </nav>
     </aside>
   )
