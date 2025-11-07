@@ -38,7 +38,6 @@ import styles from './styles.module.css'
 
 const Code = dynamic(() =>
   import('react-notion-x/build/third-party/code').then(async (m) => {
-    // add / remove any prism syntaxes here
     await Promise.allSettled([
       // @ts-expect-error Ignore prisma types
       import('prismjs/components/prism-markup-templating.js'),
@@ -227,12 +226,11 @@ export function NotionPage({
   const keys = Object.keys(recordMap?.block || {})
   const block = recordMap?.block?.[keys[0]!]?.value
 
-  // const isRootPage =
-  //   parsePageId(block?.id) === parsePageId(site?.rootNotionPageId)
   const isBlogPost =
     block?.type === 'page' && block?.parent_table === 'collection'
 
-  const showTableOfContents = !!isBlogPost
+  // 我们自己渲染右侧 TOC，所以这里设为 false，避免内置 TOC 参与
+  const showTableOfContents = false
   const minTableOfContentsItems = 3
 
   const pageAside = React.useMemo(
@@ -267,7 +265,6 @@ export function NotionPage({
   })
 
   if (!config.isServer) {
-    // add important objects to the window global for easy debugging
     const g = window as any
     g.pageId = pageId
     g.recordMap = recordMap
@@ -304,30 +301,40 @@ export function NotionPage({
       {isLiteMode && <BodyClassName className='notion-lite' />}
       {isDarkMode && <BodyClassName className='dark-mode' />}
 
-      <NotionRenderer
-        bodyClassName={cs(
-          styles.notion,
-          pageId === site.rootNotionPageId && 'index-page'
-        )}
-        darkMode={isDarkMode}
-        components={components}
-        recordMap={recordMap}
-        rootPageId={site.rootNotionPageId}
-        rootDomain={site.domain}
-        fullPage={!isLiteMode}
-        previewImages={!!recordMap.preview_images}
-        showCollectionViewDropdown={false}
-        showTableOfContents={showTableOfContents}
-        minTableOfContentsItems={minTableOfContentsItems}
-        defaultPageIcon={config.defaultPageIcon}
-        defaultPageCover={config.defaultPageCover}
-        defaultPageCoverPosition={config.defaultPageCoverPosition}
-        mapPageUrl={siteMapPageUrl}
-        mapImageUrl={mapImageUrl}
-        searchNotion={config.isSearchEnabled ? searchNotion : undefined}
-        pageAside={pageAside}
-        footer={footer}
-      />
+      {/* —— 包一层用于右侧悬浮 TOC 的布局容器 —— */}
+      <div className="notion-page-wrapper">
+        <main className="notion-content">
+          <NotionRenderer
+            bodyClassName={cs(
+              styles.notion,
+              pageId === site.rootNotionPageId && 'index-page'
+            )}
+            darkMode={isDarkMode}
+            components={components}
+            recordMap={recordMap}
+            rootPageId={site.rootNotionPageId}
+            rootDomain={site.domain}
+            fullPage={!isLiteMode}
+            previewImages={!!recordMap.preview_images}
+            showCollectionViewDropdown={false}
+            showTableOfContents={showTableOfContents}
+            minTableOfContentsItems={minTableOfContentsItems}
+            defaultPageIcon={config.defaultPageIcon}
+            defaultPageCover={config.defaultPageCover}
+            defaultPageCoverPosition={config.defaultPageCoverPosition}
+            mapPageUrl={siteMapPageUrl}
+            mapImageUrl={mapImageUrl}
+            searchNotion={config.isSearchEnabled ? searchNotion : undefined}
+            pageAside={pageAside}
+            footer={footer}
+          />
+        </main>
+
+        {/* —— 右侧悬浮目录 —— */}
+        <aside className="toc-fixed">
+          <TableOfContents recordMap={recordMap} />
+        </aside>
+      </div>
 
       <GitHubShareButton />
     </>
