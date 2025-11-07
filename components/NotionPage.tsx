@@ -155,7 +155,6 @@ const propertyLastEditedTimeValue = (
       month: 'long'
     })}`
   }
-
   return defaultFn()
 }
 
@@ -165,14 +164,12 @@ const propertyDateValue = (
 ) => {
   if (pageHeader && schema?.name?.toLowerCase() === 'published') {
     const publishDate = data?.[0]?.[1]?.[0]?.[1]?.start_date
-
     if (publishDate) {
       return `${formatDate(publishDate, {
         month: 'long'
       })}`
     }
   }
-
   return defaultFn()
 }
 
@@ -183,7 +180,6 @@ const propertyTextValue = (
   if (pageHeader && schema?.name?.toLowerCase() === 'author') {
     return <b>{defaultFn()}</b>
   }
-
   return defaultFn()
 }
 
@@ -214,15 +210,12 @@ export function NotionPage({
     []
   )
 
-  // lite mode is for oembed
   const isLiteMode = lite === 'true'
-
   const { isDarkMode } = useDarkMode()
 
   const siteMapPageUrl = React.useMemo(() => {
     const params: any = {}
     if (lite) params.lite = lite
-
     const searchParams = new URLSearchParams(params)
     return site ? mapPageUrl(site, recordMap!, searchParams) : undefined
   }, [site, recordMap, lite])
@@ -247,6 +240,22 @@ export function NotionPage({
     }
   }, [recordMap, block?.id])
 
+  // —— 点击目录平滑滚动 —— //
+  const onTocClick = React.useCallback((e: React.MouseEvent, id: string) => {
+    e.preventDefault()
+    // 优先找标题的 id；不行则找 data-block-id
+    const el =
+      document.getElementById(id) ||
+      document.querySelector<HTMLElement>(`[data-block-id="${id}"]`)
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      // 更新地址栏 hash（不刷新页面）
+      if (history && history.replaceState) {
+        history.replaceState(null, '', `#${id}`)
+      }
+    }
+  }, [])
+
   const pageAside = React.useMemo(
     () => (
       <PageAside
@@ -260,26 +269,14 @@ export function NotionPage({
 
   const footer = React.useMemo(() => <Footer />, [])
 
-  if (router.isFallback) {
-    return <Loading />
-  }
-
+  if (router.isFallback) return <Loading />
   if (error || !site || !block) {
     return <Page404 site={site} pageId={pageId} error={error} />
   }
 
   const title = getBlockTitle(block, recordMap) || site.name
 
-  console.log('notion page', {
-    isDev: config.isDev,
-    title,
-    pageId,
-    rootNotionPageId: site.rootNotionPageId,
-    recordMap
-  })
-
   if (!config.isServer) {
-    // add important objects to the window global for easy debugging
     const g = window as any
     g.pageId = pageId
     g.recordMap = recordMap
@@ -357,7 +354,7 @@ export function NotionPage({
                   marginBottom: 6
                 }}
               >
-                <a href={`#${item.id}`} title={item.text}>
+                <a href={`#${item.id}`} title={item.text} onClick={(e) => onTocClick(e, item.id)}>
                   {item.text}
                 </a>
               </li>
