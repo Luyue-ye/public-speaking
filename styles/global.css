@@ -60,3 +60,42 @@ body {
 ::-webkit-scrollbar-track {           
     background-color: var(--bg-color);
 }
+/* —— 右侧悬浮目录（固定在右侧，竖向堆叠）—— */
+:root { --gsu-blue: #0039A6; } /* GSU 蓝 */
+
+.notion-table_of_contents {
+  position: fixed !important;
+  right: 24px;
+  top: 120px;
+  width: 280px;
+  max-height: 70vh;
+  overflow: auto;
+  padding: 12px 14px;
+  background: #fff;
+  border: 1px solid #e6e9ef;
+  border-radius: 14px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.08);
+  z-index: 9;
+}
+
+/* 目录链接样式与激活高亮 */
+.notion-table_of_contents a { color: var(--gsu-blue); text-decoration: none; }
+.notion-table_of_contents a:hover { text-decoration: underline; }
+
+/* 不同层级缩进（H2/H3 等），按需微调 */
+.notion-table_of_contents .indent-1 { margin-left: 0; }
+.notion-table_of_contents .indent-2 { margin-left: 12px; }
+.notion-table_of_contents .indent-3 { margin-left: 24px; }
+
+/* 大屏给正文留出右侧空间，避免被目录挡住 */
+@media (min-width: 1280px) {
+  .notion-page-content, .notion-root {
+    margin-right: 320px !important;
+  }
+}
+
+/* 移动端隐藏悬浮目录（避免遮挡） */
+@media (max-width: 1024px) {
+  .notion-table_of_contents { display: none !important; }
+}
+
